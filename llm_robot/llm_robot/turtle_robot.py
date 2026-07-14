@@ -40,6 +40,7 @@ from std_srvs.srv import Empty
 # LLM related
 import json
 from llm_config.user_config import UserConfig
+from llm_robot.cmd_vel_sanitize import sanitize_cmd_vel_float
 
 # Global Initialization
 config = UserConfig()
@@ -80,20 +81,20 @@ class TurtleRobot(Node):
         """
         Publishes cmd_vel message to control the movement of turtlesim
         """
-        linear_x = kwargs.get("linear_x", 0.0)
-        linear_y = kwargs.get("linear_y", 0.0)
-        linear_z = kwargs.get("linear_z", 0.0)
-        angular_x = kwargs.get("angular_x", 0.0)
-        angular_y = kwargs.get("angular_y", 0.0)
-        angular_z = kwargs.get("angular_z", 0.0)
+        linear_x = sanitize_cmd_vel_float(kwargs.get("linear_x", 0.0), "linear_x")
+        linear_y = sanitize_cmd_vel_float(kwargs.get("linear_y", 0.0), "linear_y")
+        linear_z = sanitize_cmd_vel_float(kwargs.get("linear_z", 0.0), "linear_z")
+        angular_x = sanitize_cmd_vel_float(kwargs.get("angular_x", 0.0), "angular_x")
+        angular_y = sanitize_cmd_vel_float(kwargs.get("angular_y", 0.0), "angular_y")
+        angular_z = sanitize_cmd_vel_float(kwargs.get("angular_z", 0.0), "angular_z")
 
         twist_msg = Twist()
-        twist_msg.linear.x = float(linear_x)
-        twist_msg.linear.y = float(linear_y)
-        twist_msg.linear.z = float(linear_z)
-        twist_msg.angular.x = float(angular_x)
-        twist_msg.angular.y = float(angular_y)
-        twist_msg.angular.z = float(angular_z)
+        twist_msg.linear.x = linear_x
+        twist_msg.linear.y = linear_y
+        twist_msg.linear.z = linear_z
+        twist_msg.angular.x = angular_x
+        twist_msg.angular.y = angular_y
+        twist_msg.angular.z = angular_z
 
         self.publisher_.publish(twist_msg)
         self.get_logger().info(f"Publishing cmd_vel message successfully: {twist_msg}")

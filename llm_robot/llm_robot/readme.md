@@ -24,3 +24,6 @@ by creating a publisher for cmd_vel messages and a client for the reset service.
 It also includes a ChatGPT function call server
 that can call various functions to control the TurtleSim
 and return the result of the function call as a string.
+
+## Safety note
+Turtlesim `publish_cmd_vel` rejects non-finite values and clamps magnitudes to a modest demo bound (`cmd_vel_sanitize.py`).
