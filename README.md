@@ -60,6 +60,8 @@ cd ROS-LLM/llm_install
 bash config_openai_api_key.sh
 ```
 
+> **Note:** The ChatGPT ROS node fails closed at import if `OPENAI_API_KEY` is missing or empty.
+
 **4. Configure AWS Settings (Optional):**
 
 For cloud natural interaction capabilities, configure the AWS settings. If you prefer to use local ASR, this step can be skipped.

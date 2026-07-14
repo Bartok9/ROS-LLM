@@ -46,7 +46,11 @@ class UserConfig:
     def __init__(self):
         # OpenAI API related
         # [required]: OpenAI API key
-        self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        raw_openai_key = os.getenv("OPENAI_API_KEY")
+        # Treat missing or whitespace-only keys as unset (fail closed downstream).
+        self.openai_api_key = (
+            raw_openai_key.strip() if isinstance(raw_openai_key, str) and raw_openai_key.strip() else None
+        )
         # [required]: Name of the OpenAI language model to be used
         self.openai_model = "gpt-3.5-turbo-0613"
         # self.openai_model="gpt-4-0613"

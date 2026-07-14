@@ -50,6 +50,11 @@ from llm_config.user_config import UserConfig
 
 # Global Initialization
 config = UserConfig()
+if not config.openai_api_key:
+    raise RuntimeError(
+        "OPENAI_API_KEY is not set or is empty. "
+        "Export OPENAI_API_KEY or run llm_install/config_openai_api_key.sh before starting chatgpt."
+    )
 openai.api_key = config.openai_api_key
 # openai.organization = config.openai_organization
 
