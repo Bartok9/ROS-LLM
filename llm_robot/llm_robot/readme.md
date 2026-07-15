@@ -24,3 +24,7 @@ by creating a publisher for cmd_vel messages and a client for the reset service.
 It also includes a ChatGPT function call server
 that can call various functions to control the TurtleSim
 and return the result of the function call as a string.
+
+## multi_robot cmd_vel safety
+LLM-supplied vel components are rejected when non-finite; values are clamped to |v|<=2. Duration is clamped to [0,30]s.
+

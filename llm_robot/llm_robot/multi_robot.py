@@ -33,6 +33,10 @@ from llm_interfaces.srv import ChatGPT
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_robot.cmd_vel_sanitize import (
+    sanitize_cmd_vel_float,
+    sanitize_duration,
+)
 
 config = UserConfig()
 
@@ -113,13 +117,17 @@ class MultiRobot(Node):
         """
         # Get parameters
         robot_name = kwargs.get("robot_name", "")
-        duration = kwargs.get("duration", 0)
-        linear_x = kwargs.get("linear_x", 0.0)
-        linear_y = kwargs.get("linear_y", 0.0)
-        linear_z = kwargs.get("linear_z", 0.0)
-        angular_x = kwargs.get("angular_x", 0.0)
-        angular_y = kwargs.get("angular_y", 0.0)
-        angular_z = kwargs.get("angular_z", 0.0)
+        duration = sanitize_duration(kwargs.get("duration", 0))
+        try:
+            linear_x = sanitize_cmd_vel_float(kwargs.get("linear_x", 0.0), "linear_x")
+            linear_y = sanitize_cmd_vel_float(kwargs.get("linear_y", 0.0), "linear_y")
+            linear_z = sanitize_cmd_vel_float(kwargs.get("linear_z", 0.0), "linear_z")
+            angular_x = sanitize_cmd_vel_float(kwargs.get("angular_x", 0.0), "angular_x")
+            angular_y = sanitize_cmd_vel_float(kwargs.get("angular_y", 0.0), "angular_y")
+            angular_z = sanitize_cmd_vel_float(kwargs.get("angular_z", 0.0), "angular_z")
+        except ValueError as err:
+            self.get_logger().error(f"Rejected unsafe cmd_vel: {err}")
+            raise
         self.get_logger().debug(f"Received cmd_vel message: {kwargs}")
         # Create message
         twist_msg = Twist()
