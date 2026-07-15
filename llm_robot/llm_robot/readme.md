@@ -24,3 +24,7 @@ by creating a publisher for cmd_vel messages and a client for the reset service.
 It also includes a ChatGPT function call server
 that can call various functions to control the TurtleSim
 and return the result of the function call as a string.
+
+## arx5 target_pose safety
+`publish_target_pose` sanitizes xyz/rpy (finite + soft clamps) and publishes via Float64MultiArray (no shell).
+

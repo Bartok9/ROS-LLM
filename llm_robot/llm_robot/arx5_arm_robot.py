@@ -39,8 +39,8 @@ from std_srvs.srv import Empty
 
 # LLM related
 import json
-import os
 from llm_config.user_config import UserConfig
+from llm_robot.target_pose_sanitize import sanitize_target_pose
 
 # Global Initialization
 config = UserConfig()
@@ -78,22 +78,16 @@ class ArmRobot(Node):
 
     def publish_target_pose(self, **kwargs):
         """
-        Publishes target_pose message to control the movement of arx5_arm
+        Publishes target_pose message to control the movement of arx5_arm.
+
+        LLM args are sanitized (finite + soft workspace clamps). Uses the
+        native publisher instead of shelling out to `ros2 topic pub`.
         """
-
-        x_value = kwargs.get("x", 0.2)
-        y_value = kwargs.get("y", 0.2)
-        z_value = kwargs.get("z", 0.2)
-
-        roll_value = kwargs.get("roll", 0.2)
-        pitch_value = kwargs.get("pitch", 0.2)
-        yaw_value = kwargs.get("yaw", 0.2)
-
-        pose = [x_value, y_value, z_value, roll_value, pitch_value, yaw_value]
-        pose_str = ', '.join(map(str, pose))
-
-        command=f"ros2 topic pub /target_pose std_msgs/msg/Float64MultiArray '{{data: [{pose_str}]}}' -1"
-        os.system(command)
+        pose = sanitize_target_pose(kwargs)
+        msg = Float64MultiArray()
+        msg.data = pose
+        self.target_pose_publisher.publish(msg)
+        pose_str = ", ".join(map(str, pose))
         self.get_logger().info(f"Published target message successfully: {pose}")
         return pose_str
 
