@@ -30,6 +30,7 @@ from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
 from llm_interfaces.srv import ChatGPT
+from llm_robot.robot_name_sanitize import sanitize_robot_name
 
 # Global Initialization
 from llm_config.user_config import UserConfig
@@ -112,7 +113,10 @@ class MultiRobot(Node):
         Publishes cmd_vel message to control the movement of all types of robots
         """
         # Get parameters
-        robot_name = kwargs.get("robot_name", "")
+        ok, robot_name, name_err = sanitize_robot_name(kwargs.get("robot_name", ""))
+        if not ok:
+            self.get_logger().info(f"Rejected publish_cmd_vel: {name_err}")
+            return name_err
         duration = kwargs.get("duration", 0)
         linear_x = kwargs.get("linear_x", 0.0)
         linear_y = kwargs.get("linear_y", 0.0)
