@@ -30,6 +30,7 @@ from std_msgs.msg import String
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import Twist
 from llm_interfaces.srv import ChatGPT
+from llm_robot.ros_arg_sanitize import sanitize_service_call_args
 
 # Global Initialization
 from llm_config.user_config import UserConfig
@@ -98,7 +99,13 @@ class MultiRobot(Node):
         # TODO: Add support for non-empty input service
         service_name = kwargs.get("service_name", "")
         service_type = kwargs.get("service_type", "")
-        command = ["ros2", "service", "call", service_name, service_type]
+        ok, name_or_err, type_or_empty = sanitize_service_call_args(
+            service_name, service_type
+        )
+        if not ok:
+            self.get_logger().info(f"Rejected call_service: {name_or_err}")
+            return name_or_err
+        command = ["ros2", "service", "call", name_or_err, type_or_empty]
 
         try:
             command_result = subprocess.check_output(command, stderr=subprocess.STDOUT)
