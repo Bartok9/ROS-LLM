@@ -33,6 +33,7 @@ from llm_interfaces.srv import ChatGPT
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_robot.duration_sanitize import sanitize_duration
 
 config = UserConfig()
 
@@ -113,7 +114,11 @@ class MultiRobot(Node):
         """
         # Get parameters
         robot_name = kwargs.get("robot_name", "")
-        duration = kwargs.get("duration", 0)
+        try:
+            duration = sanitize_duration(kwargs.get("duration", 0))
+        except ValueError as err:
+            self.get_logger().info(f"Rejected publish_cmd_vel duration: {err}")
+            return str(err)
         linear_x = kwargs.get("linear_x", 0.0)
         linear_y = kwargs.get("linear_y", 0.0)
         linear_z = kwargs.get("linear_z", 0.0)
