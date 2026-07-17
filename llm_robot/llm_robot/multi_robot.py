@@ -33,6 +33,7 @@ from llm_interfaces.srv import ChatGPT
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_robot.function_call_guard import resolve_function
 
 config = UserConfig()
 
@@ -83,7 +84,12 @@ class MultiRobot(Node):
         req = json.loads(request.request_text)
         function_name = req["name"]
         function_args = json.loads(req["arguments"])
-        func_obj = getattr(self, function_name)
+        ok, name_or_err = resolve_function("multi", function_name)
+        if not ok:
+            self.get_logger().info(f"Rejected function call: {name_or_err}")
+            response.response_text = name_or_err
+            return response
+        func_obj = getattr(self, name_or_err)
         try:
             function_execution_result = func_obj(**function_args)
         except Exception as error:
