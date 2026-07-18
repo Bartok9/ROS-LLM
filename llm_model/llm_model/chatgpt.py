@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.function_call_payload import sanitize_function_call
 
 
 # Global Initialization
@@ -256,10 +257,16 @@ class ChatGPTNode(Node):
         Sends a function call request with the given input and waits for the response.
         When the response is received, the function call response callback is called.
         """
-        # JSON object to string
-        function_call_input_str = json.dumps(function_call_input)
+        ok, normalized_or_err = sanitize_function_call(function_call_input)
+        if not ok:
+            self.get_logger().error(
+                f"Rejected ChatGPT function_call payload: {normalized_or_err}"
+            )
+            return
+        # JSON object to string (sanitized, serializable)
+        function_call_input_str = json.dumps(normalized_or_err)
         # Get function name
-        self.function_name = function_call_input["name"]
+        self.function_name = normalized_or_err["name"]
         # Send function call request
         self.function_call_requst.request_text = function_call_input_str
         self.get_logger().info(
@@ -315,9 +322,18 @@ class ChatGPTNode(Node):
         message, text, function_call, function_flag = self.get_response_information(
             chatgpt_response
         )
-        # Append response to chat history
+        # Append response to chat history (JSON-serializable function_call only)
+        history_function_call = None
+        if function_call is not None:
+            ok_fc, normalized_fc = sanitize_function_call(function_call)
+            if ok_fc:
+                history_function_call = normalized_fc
+            else:
+                self.get_logger().error(
+                    f"Omitting unsanitized function_call from history: {normalized_fc}"
+                )
         self.add_message_to_history(
-            role="assistant", content=text, function_call=function_call
+            role="assistant", content=text, function_call=history_function_call
         )
         # Write chat history to JSON
         self.write_chat_history_to_json()
