@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.audio_params import sanitize_recording_params
 
 config = UserConfig()
 
@@ -89,10 +90,20 @@ class AudioInput(Node):
             self.action_function_listening()
 
     def action_function_listening(self):
-        # Recording settings
-        duration = config.duration  # Audio recording duration, in seconds
-        sample_rate = config.sample_rate  # Sample rate
-        volume_gain_multiplier = config.volume_gain_multiplier  # Volume gain multiplier
+        # Recording settings (fail-closed clamp before buffer allocation)
+        ok_params, duration, sample_rate, volume_gain_multiplier, param_err = (
+            sanitize_recording_params(
+                config.duration,
+                config.sample_rate,
+                config.volume_gain_multiplier,
+            )
+        )
+        if not ok_params:
+            self.get_logger().error(
+                f"Rejected audio recording parameters: {param_err}"
+            )
+            self.publish_string("listening", self.llm_state_publisher)
+            return
         # AWS S3 settings
         bucket_name = config.bucket_name
         audio_file_key = "gpt_audio.flac"  # Name of the audio file in S3
