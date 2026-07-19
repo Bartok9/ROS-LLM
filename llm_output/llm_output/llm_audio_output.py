@@ -29,6 +29,12 @@ import datetime
 import json
 import requests
 import time
+import subprocess
+
+from llm_output.polly_sanitize import (
+    sanitize_feedback_text,
+    sanitize_polly_voice_id,
+)
 
 # AWS ASR related
 import boto3
@@ -81,19 +87,36 @@ class AudioOutput(Node):
     def feedback_for_user_callback(self, msg):
         self.get_logger().info("Received text: '%s'" % msg.data)
 
+        ok_text, text_or_err = sanitize_feedback_text(msg.data)
+        if not ok_text:
+            self.get_logger().warn(
+                "Skipping Polly synthesize: %s" % text_or_err
+            )
+            self.publish_string("listening", self.llm_state_publisher)
+            return
+
+        voice_id = sanitize_polly_voice_id(config.aws_voice_id)
+
         # Call AWS Polly service to synthesize speech
         polly_client = self.aws_session.client("polly")
         self.get_logger().info("Polly client successfully initialized.")
         response = polly_client.synthesize_speech(
-            Text=msg.data, OutputFormat="mp3", VoiceId=config.aws_voice_id
+            Text=text_or_err, OutputFormat="mp3", VoiceId=voice_id
         )
 
         # Save the audio output to a file
         output_file_path = "/tmp/speech_output.mp3"
         with open(output_file_path, "wb") as file:
             file.write(response["AudioStream"].read())
-        # Play the audio output
-        os.system("mpv" + " " + output_file_path)
+        # Play the audio output without a shell (avoid injection)
+        try:
+            subprocess.run(
+                ["mpv", "--", output_file_path],
+                check=False,
+                timeout=120,
+            )
+        except Exception as exc:
+            self.get_logger().error("mpv playback failed: %s" % exc)
         self.get_logger().info("Finished Polly playing.")
         self.publish_string("feedback finished", self.llm_state_publisher)
         self.publish_string("listening", self.llm_state_publisher)
