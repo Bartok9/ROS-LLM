@@ -28,6 +28,10 @@
 
 # Open Whisper related
 import whisper
+from llm_input.whisper_params import (
+    sanitize_whisper_language,
+    sanitize_whisper_model_size,
+)
 
 # Audio recording related
 import sounddevice as sd
@@ -98,13 +102,17 @@ class AudioInput(Node):
         self.publish_string("input_processing", self.llm_state_publisher)
 
         # Step 4: Process audio with OpenAI Whisper
-        whisper_model = whisper.load_model(config.whisper_model_size)
+        model_size = sanitize_whisper_model_size(config.whisper_model_size)
+        whisper_language = sanitize_whisper_language(config.whisper_language)
+        whisper_model = whisper.load_model(model_size)
 
         # Step 6: Wait until the conversion is complete
         self.get_logger().info("Local Converting...")
 
         # Step 7: Get the transcribed text
-        whisper_result = whisper_model.transcribe(self.tmp_audio_file,language=config.whisper_language)
+        whisper_result = whisper_model.transcribe(
+            self.tmp_audio_file, language=whisper_language
+        )
 
         transcript_text = whisper_result["text"]
         self.get_logger().info("Audio to text conversion complete!")
