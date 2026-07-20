@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.aws_transcribe_params import sanitize_aws_transcribe_language
 
 config = UserConfig()
 
@@ -131,7 +132,9 @@ class AudioInput(Node):
         self.get_logger().info("Converting audio to text...")
         transcribe.start_transcription_job(
             TranscriptionJobName=transcribe_job_name,
-            LanguageCode=config.aws_transcription_language,
+            LanguageCode=sanitize_aws_transcribe_language(
+                config.aws_transcription_language
+            ),
             Media={"MediaFileUri": transcribe_job_uri},
         )
 
