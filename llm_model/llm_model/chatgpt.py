@@ -46,6 +46,11 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.openai_model_params import (
+    clamp_chat_history_max_length,
+    safe_chat_history_filename,
+    sanitize_openai_model_id,
+)
 
 
 # Global Initialization
@@ -111,7 +116,14 @@ class ChatGPTNode(Node):
         # exceeding token limit, waiting to update @Herman Ye
         self.start_timestamp = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
         self.chat_history_file = os.path.join(
-            config.chat_history_path, f"chat_history_{self.start_timestamp}.json"
+            config.chat_history_path,
+            safe_chat_history_filename(self.start_timestamp),
+        )
+        self.chat_history_max_length = clamp_chat_history_max_length(
+            getattr(config, "chat_history_max_length", 4000)
+        )
+        self.openai_model = sanitize_openai_model_id(
+            getattr(config, "openai_model", None)
         )
         self.write_chat_history_to_json()
         self.get_logger().info(f"Chat history saved to {self.chat_history_file}")
@@ -162,7 +174,7 @@ class ChatGPTNode(Node):
         # Log
         self.get_logger().info(f"Chat history updated with {message_element_object}")
         # Checking if chat history is too long
-        if len(config.chat_history) > config.chat_history_max_length:
+        if len(config.chat_history) > self.chat_history_max_length:
             self.get_logger().info(
                 f"Chat history is too long, popping the oldest message: {config.chat_history[0]}"
             )
@@ -179,7 +191,7 @@ class ChatGPTNode(Node):
         # Log
         self.get_logger().info(f"Sending messages to OpenAI: {messages_input}")
         response = openai.ChatCompletion.create(
-            model=config.openai_model,
+            model=self.openai_model,
             messages=messages_input,
             functions=config.robot_functions_list,
             function_call="auto",
