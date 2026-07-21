@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_output.aws_credentials import aws_credentials_ok
 
 config = UserConfig()
 
@@ -80,6 +81,13 @@ class AudioOutput(Node):
 
     def feedback_for_user_callback(self, msg):
         self.get_logger().info("Received text: '%s'" % msg.data)
+
+        if not aws_credentials_ok(self.aws_access_key_id, self.aws_secret_access_key):
+            self.get_logger().error(
+                "AWS credentials missing or empty; skip Polly synthesis (fail-closed)"
+            )
+            self.publish_string("output_error", self.llm_state_publisher)
+            return
 
         # Call AWS Polly service to synthesize speech
         polly_client = self.aws_session.client("polly")
