@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_output.feedback_text import sanitize_feedback_text
 
 config = UserConfig()
 
@@ -81,11 +82,19 @@ class AudioOutput(Node):
     def feedback_for_user_callback(self, msg):
         self.get_logger().info("Received text: '%s'" % msg.data)
 
+        feedback = sanitize_feedback_text(msg.data)
+        if feedback is None:
+            self.get_logger().error(
+                "Empty or invalid LLM feedback text; skip Polly synthesis"
+            )
+            self.publish_string("output_error", self.llm_state_publisher)
+            return
+
         # Call AWS Polly service to synthesize speech
         polly_client = self.aws_session.client("polly")
         self.get_logger().info("Polly client successfully initialized.")
         response = polly_client.synthesize_speech(
-            Text=msg.data, OutputFormat="mp3", VoiceId=config.aws_voice_id
+            Text=feedback, OutputFormat="mp3", VoiceId=config.aws_voice_id
         )
 
         # Save the audio output to a file
