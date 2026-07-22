@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.aws_s3_params import sanitize_aws_region, sanitize_s3_bucket_name
 
 config = UserConfig()
 
@@ -57,12 +58,19 @@ class AudioInput(Node):
         self.aws_audio_file = "/tmp/user_audio_input.flac"
         self.aws_access_key_id = config.aws_access_key_id
         self.aws_secret_access_key = config.aws_secret_access_key
-        self.aws_region_name = config.aws_region_name
-        self.aws_session = boto3.Session(
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name=self.aws_region_name,
-        )
+        # Fail-closed: only keep a validated AWS region for the session.
+        self.aws_region_name = sanitize_aws_region(config.aws_region_name)
+        self.aws_session = None
+        if self.aws_region_name is not None:
+            self.aws_session = boto3.Session(
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region_name,
+            )
+        else:
+            self.get_logger().error(
+                "Invalid AWS region_name; S3/Transcribe input disabled (fail-closed)"
+            )
 
         # Initialization publisher
         self.initialization_publisher = self.create_publisher(
@@ -89,12 +97,26 @@ class AudioInput(Node):
             self.action_function_listening()
 
     def action_function_listening(self):
+        # Fail-closed config gate before allocating buffers / talking to AWS.
+        if self.aws_session is None or self.aws_region_name is None:
+            self.get_logger().error(
+                "AWS region invalid or session missing; skip recording (fail-closed)"
+            )
+            self.publish_string("input_error", self.llm_state_publisher)
+            return
+        bucket_name = sanitize_s3_bucket_name(config.bucket_name)
+        if bucket_name is None:
+            self.get_logger().error(
+                "Invalid S3 bucket_name; skip recording/upload (fail-closed)"
+            )
+            self.publish_string("input_error", self.llm_state_publisher)
+            return
+
         # Recording settings
         duration = config.duration  # Audio recording duration, in seconds
         sample_rate = config.sample_rate  # Sample rate
         volume_gain_multiplier = config.volume_gain_multiplier  # Volume gain multiplier
         # AWS S3 settings
-        bucket_name = config.bucket_name
         audio_file_key = "gpt_audio.flac"  # Name of the audio file in S3
         transcribe_job_name = (
             f'my-transcribe-job-{datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")}'
