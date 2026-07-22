@@ -42,6 +42,46 @@ from .robot_behavior import RobotBehavior
 import os
 
 
+# AWS region allowlist (common public regions) + S3 bucket DNS rules
+_AWS_REGIONS = frozenset({
+    "us-east-1", "us-east-2", "us-west-1", "us-west-2",
+    "eu-west-1", "eu-west-2", "eu-west-3", "eu-central-1", "eu-north-1",
+    "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ap-northeast-2",
+    "ap-south-1", "ca-central-1", "sa-east-1",
+})
+
+
+def sanitize_aws_region(region, default="ap-southeast-1"):
+    """Return a known AWS region or *default* if invalid."""
+    if region is None:
+        return default
+    r = str(region).strip().lower()
+    if r in _AWS_REGIONS:
+        return r
+    return default
+
+
+def sanitize_s3_bucket(name):
+    """
+    Validate S3 bucket name DNS rules.
+    Returns sanitized name or raises ValueError.
+    """
+    if name is None:
+        raise ValueError("S3 bucket name is required")
+    b = str(name).strip().lower()
+    if len(b) < 3 or len(b) > 63:
+        raise ValueError("S3 bucket name length must be 3-63")
+    if b.startswith("-") or b.startswith(".") or b.endswith("-") or b.endswith("."):
+        raise ValueError("S3 bucket name has invalid edge character")
+    if ".." in b or "_" in b:
+        raise ValueError("S3 bucket name has invalid sequence")
+    allowed = set("abcdefghijklmnopqrstuvwxyz0123456789-.")
+    if not all(c in allowed for c in b):
+        raise ValueError("S3 bucket name has invalid characters")
+    return b
+
+
+
 class UserConfig:
     def __init__(self):
         # OpenAI API related
@@ -105,9 +145,14 @@ class UserConfig:
         # [required]: AWS IAM secret access key
         self.aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         # [required]: AWS IAM region name
-        self.aws_region_name = 'ap-southeast-1'
+        self.aws_region_name = sanitize_aws_region(os.getenv("AWS_REGION", "ap-southeast-1"))
         # [required]: AWS S3 bucket name
-        self.bucket_name = 'auromixbucket'
+        _bucket = os.getenv("AWS_S3_BUCKET", "auromixbucket")
+        try:
+            self.bucket_name = sanitize_s3_bucket(_bucket)
+        except ValueError:
+            # Fail closed to stock demo bucket only if env is garbage; keep demo default
+            self.bucket_name = sanitize_s3_bucket("auromixbucket")
         # [optional]: AWS transcription language, change this to 'zh-CN' for Chinese
         self.aws_transcription_language = "en-US"
         # [optional]: AWS polly voice id, change this to 'Zhiyu' for Chinese
