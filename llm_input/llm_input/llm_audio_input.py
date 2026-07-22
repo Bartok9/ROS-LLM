@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.aws_credentials import aws_credentials_ok
 
 config = UserConfig()
 
@@ -58,11 +59,17 @@ class AudioInput(Node):
         self.aws_access_key_id = config.aws_access_key_id
         self.aws_secret_access_key = config.aws_secret_access_key
         self.aws_region_name = config.aws_region_name
-        self.aws_session = boto3.Session(
-            aws_access_key_id=self.aws_access_key_id,
-            aws_secret_access_key=self.aws_secret_access_key,
-            region_name=self.aws_region_name,
-        )
+        self.aws_session = None
+        if aws_credentials_ok(self.aws_access_key_id, self.aws_secret_access_key):
+            self.aws_session = boto3.Session(
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region_name,
+            )
+        else:
+            self.get_logger().error(
+                "AWS credentials missing or empty; S3/Transcribe input disabled (fail-closed)"
+            )
 
         # Initialization publisher
         self.initialization_publisher = self.create_publisher(
@@ -89,6 +96,16 @@ class AudioInput(Node):
             self.action_function_listening()
 
     def action_function_listening(self):
+        # Fail-closed: never record/upload without usable IAM credentials.
+        if self.aws_session is None or not aws_credentials_ok(
+            self.aws_access_key_id, self.aws_secret_access_key
+        ):
+            self.get_logger().error(
+                "AWS credentials missing or empty; skip recording (fail-closed)"
+            )
+            self.publish_string("input_error", self.llm_state_publisher)
+            return
+
         # Recording settings
         duration = config.duration  # Audio recording duration, in seconds
         sample_rate = config.sample_rate  # Sample rate
