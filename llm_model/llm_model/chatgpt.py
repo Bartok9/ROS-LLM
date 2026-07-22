@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.user_prompt_sanitize import sanitize_user_prompt
 
 
 # Global Initialization
@@ -306,8 +307,15 @@ class ChatGPTNode(Node):
         self.get_logger().info("STATE: model_processing")
 
         self.get_logger().info(f"Input message received: {msg.data}")
+        # Fail-closed: bound/refuse empty or oversized user prompts before OpenAI.
+        user_prompt = sanitize_user_prompt(msg.data)
+        if user_prompt is None:
+            self.get_logger().error(
+                "Empty or invalid user prompt; skip OpenAI (fail-closed)"
+            )
+            self.publish_string("model_error", self.llm_state_publisher)
+            return
         # Add user message to chat history
-        user_prompt = msg.data
         self.add_message_to_history("user", user_prompt)
         # Generate chat completion
         chatgpt_response = self.generate_chatgpt_response(config.chat_history)
