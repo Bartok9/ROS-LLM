@@ -41,6 +41,73 @@
 from .robot_behavior import RobotBehavior
 import os
 
+import math
+
+
+def _finite_float(value, default):
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    if not math.isfinite(v):
+        return float(default)
+    return v
+
+
+def clamp_openai_temperature(value, default=1.0):
+    v = _finite_float(value, default)
+    return max(0.0, min(2.0, v))
+
+
+def clamp_openai_top_p(value, default=1.0):
+    v = _finite_float(value, default)
+    if v <= 0.0:
+        return float(default) if float(default) > 0 else 1.0
+    return min(1.0, v)
+
+
+def clamp_openai_n(value, default=1):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    if n < 1:
+        return 1
+    if n > 16:
+        return 16
+    return n
+
+
+def clamp_openai_max_tokens(value, default=4000):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    if n < 1:
+        return 1
+    if n > 128000:
+        return 128000
+    return n
+
+
+def clamp_openai_penalty(value, default=0.0):
+    v = _finite_float(value, default)
+    return max(-2.0, min(2.0, v))
+
+
+def clamp_chat_history_max_length(value, default=4000):
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    if n < 1:
+        return 1
+    if n > 100000:
+        return 100000
+    return n
+
+
+
 
 class UserConfig:
     def __init__(self):
@@ -53,22 +120,22 @@ class UserConfig:
         # [optional]: Name of the organization under which the OpenAI API key is registered
         self.openai_organization = "Auromix"
         # [optional]: Controls the creativity of the AI’s responses. Higher values lead to more creative, but less coherent, responses
-        self.openai_temperature = 1
+        self.openai_temperature = clamp_openai_temperature(1)
         # [optional]: Probability distribution cutoff for generating responses
-        self.openai_top_p = 1
+        self.openai_top_p = clamp_openai_top_p(1)
         # [optional]: Number of responses to generate in batch
-        self.openai_n = 1
+        self.openai_n = clamp_openai_n(1)
         # [optional]: Whether to stream response results or not
         self.openai_stream = False
         # [optional]: String that if present in the AI's response, marks the end of the response
         self.openai_stop = "NULL"
         # [optional]: Maximum number of tokens allowed in the AI's respons
-        self.openai_max_tokens = 4000
+        self.openai_max_tokens = clamp_openai_max_tokens(4000)
         # self.openai_max_tokens= 16000
         # [optional]: Value that promotes the AI to generates responses with higher diversity
-        self.openai_frequency_penalty = 0
+        self.openai_frequency_penalty = clamp_openai_penalty(0)
         # [optional]: Value that promotes the AI to generates responses with more information at the text prompt
-        self.openai_presence_penalty = 0
+        self.openai_presence_penalty = clamp_openai_penalty(0)
 
         # IO related
         # [optional]: The prompt given to the AI, provided by the user
@@ -87,7 +154,7 @@ class UserConfig:
         self.chat_history_path = os.path.expanduser("~")
         # self.chat_history_path = os.path.dirname(os.path.abspath(__file__))
         # [optional]: The limit of the chat history length
-        self.chat_history_max_length = 4000
+        self.chat_history_max_length = clamp_chat_history_max_length(4000)
         # self.chat_history_max_length=16000
 
         # Robot behavior related
