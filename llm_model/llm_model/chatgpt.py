@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.chat_role_sanitize import sanitize_chat_role
 
 
 # Global Initialization
@@ -146,9 +147,16 @@ class ChatGPTNode(Node):
         the oldest message_element_object will be removed.
         Returns the updated chat history list.
         """
+        # Fail-closed: only OpenAI-valid roles may enter history.
+        clean_role = sanitize_chat_role(role)
+        if clean_role is None:
+            self.get_logger().error(
+                f"Rejected invalid chat history role: {role!r}"
+            )
+            return config.chat_history
         # Creating message dictionary with given options
         message_element_object = {
-            "role": role,
+            "role": clean_role,
             "content": content,
         }
         # Adding function call information if provided
