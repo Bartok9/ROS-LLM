@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.chat_history_path import ensure_chat_history_dir
 
 
 # Global Initialization
@@ -110,8 +111,9 @@ class ChatGPTNode(Node):
         # TODO: Longer interactive content should be stored in the JSON file
         # exceeding token limit, waiting to update @Herman Ye
         self.start_timestamp = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+        history_dir = ensure_chat_history_dir(config.chat_history_path)
         self.chat_history_file = os.path.join(
-            config.chat_history_path, f"chat_history_{self.start_timestamp}.json"
+            history_dir, f"chat_history_{self.start_timestamp}.json"
         )
         self.write_chat_history_to_json()
         self.get_logger().info(f"Chat history saved to {self.chat_history_file}")
