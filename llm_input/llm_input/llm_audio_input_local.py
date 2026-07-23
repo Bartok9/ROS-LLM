@@ -40,6 +40,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.transcript_sanitize import sanitize_transcript_text
 
 config = UserConfig()
 
@@ -109,12 +110,13 @@ class AudioInput(Node):
         transcript_text = whisper_result["text"]
         self.get_logger().info("Audio to text conversion complete!")
 
-        # Step 8: Publish the transcribed text to ROS2
-        if transcript_text == "":  # Empty input
-            self.get_logger().info("Empty input!")
+        # Step 8: Publish the transcribed text to ROS2 (bounded / fail-closed)
+        cleaned = sanitize_transcript_text(transcript_text)
+        if cleaned is None:
+            self.get_logger().info("Empty or invalid transcript; re-listen")
             self.publish_string("listening", self.llm_state_publisher)
         else:
-            self.publish_string(transcript_text, self.audio_to_text_publisher)
+            self.publish_string(cleaned, self.audio_to_text_publisher)
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()
