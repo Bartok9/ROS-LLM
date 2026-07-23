@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.text_content import normalize_openai_text
 
 
 # Global Initialization
@@ -127,7 +128,7 @@ class ChatGPTNode(Node):
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()
-        msg.data = string_to_send
+        msg.data = normalize_openai_text(string_to_send)
 
         publisher_to_use.publish(msg)
         self.get_logger().info(
@@ -204,7 +205,8 @@ class ChatGPTNode(Node):
         """
         # Getting response information
         message = chatgpt_response["choices"][0]["message"]
-        content = message.get("content")
+        content = normalize_openai_text(message.get("content"))
+        # Empty content means function-call style responses (flag below)
         function_call = message.get("function_call", None)
 
         # Initializing function flag, 0: no function call, 1: function call
@@ -212,12 +214,18 @@ class ChatGPTNode(Node):
 
         # If the content is not None, then the response is text
         # If the content is None, then the response is function call
-        if content is not None:
+        if content != "" and function_call is None:
+            function_flag = 0
+            self.get_logger().info("OpenAI response type: TEXT")
+        elif function_call is not None:
+            function_flag = 1
+            self.get_logger().info("OpenAI response type: FUNCTION CALL")
+        elif content != "":
             function_flag = 0
             self.get_logger().info("OpenAI response type: TEXT")
         else:
-            function_flag = 1
-            self.get_logger().info("OpenAI response type: FUNCTION CALL")
+            function_flag = 0
+            self.get_logger().info("OpenAI response type: TEXT")
         # Log
         self.get_logger().info(
             f"Get message from OpenAI: {message}, type: {type(message)}"
