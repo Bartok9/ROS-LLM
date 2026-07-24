@@ -46,6 +46,9 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.service_response_text import (
+    normalize_function_call_response_text,
+)
 
 
 # Global Initialization
@@ -274,6 +277,8 @@ class ChatGPTNode(Node):
         the function_call_response_callback will call the gpt service again
         to get the text response to user
         """
+        response = None
+        err = None
         try:
             response = future.result()
             self.get_logger().info(
@@ -281,9 +286,10 @@ class ChatGPTNode(Node):
             )
 
         except Exception as e:
+            err = e
             self.get_logger().info(f"ChatGPT function call service failed {e}")
 
-        response_text = "null"
+        response_text = normalize_function_call_response_text(response, error=err)
         self.add_message_to_history(
             role="function",
             name=self.function_name,
