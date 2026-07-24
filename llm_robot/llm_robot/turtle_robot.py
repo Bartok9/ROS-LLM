@@ -40,6 +40,7 @@ from std_srvs.srv import Empty
 # LLM related
 import json
 from llm_config.user_config import UserConfig
+from llm_robot.function_call_json import parse_function_call_request
 
 # Global Initialization
 config = UserConfig()
@@ -63,10 +64,19 @@ class TurtleRobot(Node):
         self.get_logger().info("TurtleRobot node has been initialized")
 
     def function_call_callback(self, request, response):
-        req = json.loads(request.request_text)
-        function_name = req["name"]
-        function_args = json.loads(req["arguments"])
-        func_obj = getattr(self, function_name)
+        ok, function_name, function_args, parse_error = parse_function_call_request(
+            request.request_text
+        )
+        if not ok:
+            self.get_logger().info(f"Failed to parse function call: {parse_error}")
+            response.response_text = str(parse_error)
+            return response
+        func_obj = getattr(self, function_name, None)
+        if not callable(func_obj):
+            err = f"unknown function: {function_name}"
+            self.get_logger().info(f"Failed to call function: {err}")
+            response.response_text = err
+            return response
         try:
             function_execution_result = func_obj(**function_args)
         except Exception as error:
