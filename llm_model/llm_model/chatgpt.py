@@ -46,6 +46,7 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.openai_response_shape import extract_choice_message
 
 
 # Global Initialization
@@ -202,22 +203,16 @@ class ChatGPTNode(Node):
         The response information includes the message, text, function call, and function flag.
         function_flag = 0: no function call, 1: function call
         """
-        # Getting response information
-        message = chatgpt_response["choices"][0]["message"]
-        content = message.get("content")
-        function_call = message.get("function_call", None)
+        message, content, function_call, function_flag = extract_choice_message(
+            chatgpt_response
+        )
 
-        # Initializing function flag, 0: no function call, 1: function call
-        function_flag = 0
-
-        # If the content is not None, then the response is text
-        # If the content is None, then the response is function call
         if content is not None:
-            function_flag = 0
             self.get_logger().info("OpenAI response type: TEXT")
-        else:
-            function_flag = 1
+        elif function_flag == 1:
             self.get_logger().info("OpenAI response type: FUNCTION CALL")
+        else:
+            self.get_logger().info("OpenAI response type: UNKNOWN_OR_EMPTY")
         # Log
         self.get_logger().info(
             f"Get message from OpenAI: {message}, type: {type(message)}"
