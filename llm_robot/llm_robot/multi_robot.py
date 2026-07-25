@@ -33,6 +33,7 @@ from llm_interfaces.srv import ChatGPT
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_robot.service_call_timeout import clamp_timeout, run_ros2_service_call
 
 config = UserConfig()
 
@@ -98,14 +99,9 @@ class MultiRobot(Node):
         # TODO: Add support for non-empty input service
         service_name = kwargs.get("service_name", "")
         service_type = kwargs.get("service_type", "")
+        timeout_sec = clamp_timeout(kwargs.get("timeout", None))
         command = ["ros2", "service", "call", service_name, service_type]
-
-        try:
-            command_result = subprocess.check_output(command, stderr=subprocess.STDOUT)
-            command_result = command_result.decode("utf-8")  # Convert bytes to string
-        except subprocess.CalledProcessError as command_error:
-            command_result = command_error.output.decode("utf-8")
-        return command_result
+        return run_ros2_service_call(command, timeout_sec)
 
     def publish_cmd_vel(self, **kwargs):
         """
