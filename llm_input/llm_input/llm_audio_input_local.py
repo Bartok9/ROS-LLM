@@ -40,6 +40,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.audio_params_local import clamp_local_recording_params
 
 config = UserConfig()
 
@@ -75,10 +76,19 @@ class AudioInput(Node):
             self.action_function_listening()
 
     def action_function_listening(self):
-        # Recording settings
-        duration = config.duration  # Audio recording duration, in seconds
-        sample_rate = config.sample_rate  # Sample rate
-        volume_gain_multiplier = config.volume_gain_multiplier  # Volume gain multiplier
+        # Recording settings (bounded before buffer allocation)
+        try:
+            duration, sample_rate, volume_gain_multiplier = (
+                clamp_local_recording_params(
+                    config.duration,
+                    config.sample_rate,
+                    config.volume_gain_multiplier,
+                )
+            )
+        except ValueError as err:
+            self.get_logger().error(f"Invalid local recording params: {err}")
+            self.publish_string("listening", self.llm_state_publisher)
+            return
 
         # Step 1: Record audio
         self.get_logger().info("Start local recording...")
