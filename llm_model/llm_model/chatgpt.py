@@ -46,12 +46,16 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.openai_timeout import clamp_openai_request_timeout
 
 
 # Global Initialization
 config = UserConfig()
 openai.api_key = config.openai_api_key
 # openai.organization = config.openai_organization
+_OPENAI_REQUEST_TIMEOUT = clamp_openai_request_timeout(
+    getattr(config, "openai_request_timeout", 30)
+)
 
 
 class ChatGPTNode(Node):
@@ -183,6 +187,7 @@ class ChatGPTNode(Node):
             messages=messages_input,
             functions=config.robot_functions_list,
             function_call="auto",
+            request_timeout=_OPENAI_REQUEST_TIMEOUT,
             # temperature=config.openai_temperature,
             # top_p=config.openai_top_p,
             # n=config.openai_n,

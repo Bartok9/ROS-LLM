@@ -70,6 +70,9 @@ class UserConfig:
         # [optional]: Value that promotes the AI to generates responses with more information at the text prompt
         self.openai_presence_penalty = 0
 
+        # [optional]: OpenAI HTTP request timeout in seconds
+        self.openai_request_timeout = 30
+
         # IO related
         # [optional]: The prompt given to the AI, provided by the user
         self.user_prompt = ""
