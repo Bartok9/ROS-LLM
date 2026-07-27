@@ -46,6 +46,10 @@ import os
 import time
 import openai
 from llm_config.user_config import UserConfig
+from llm_model.openai_call_guard import (
+    completion_or_empty,
+    is_usable_chat_completion,
+)
 
 
 # Global Initialization
@@ -178,20 +182,26 @@ class ChatGPTNode(Node):
         """
         # Log
         self.get_logger().info(f"Sending messages to OpenAI: {messages_input}")
-        response = openai.ChatCompletion.create(
-            model=config.openai_model,
-            messages=messages_input,
-            functions=config.robot_functions_list,
-            function_call="auto",
-            # temperature=config.openai_temperature,
-            # top_p=config.openai_top_p,
-            # n=config.openai_n,
-            # stream=config.openai_stream,
-            # stop=config.openai_stop,
-            # max_tokens=config.openai_max_tokens,
-            # presence_penalty=config.openai_presence_penalty,
-            # frequency_penalty=config.openai_frequency_penalty,
-        )
+        try:
+            response = openai.ChatCompletion.create(
+                model=config.openai_model,
+                messages=messages_input,
+                functions=config.robot_functions_list,
+                function_call="auto",
+                # temperature=config.openai_temperature,
+                # top_p=config.openai_top_p,
+                # n=config.openai_n,
+                # stream=config.openai_stream,
+                # stop=config.openai_stop,
+                # max_tokens=config.openai_max_tokens,
+                # presence_penalty=config.openai_presence_penalty,
+                # frequency_penalty=config.openai_frequency_penalty,
+            )
+        except Exception as error:
+            # Fail-closed: never crash the node on network/API errors
+            self.get_logger().error(f"OpenAI ChatCompletion failed: {error}")
+            return completion_or_empty(None, error=error)
+        response = completion_or_empty(response)
         # Log
         self.get_logger().info(f"OpenAI response: {response}")
         return response
@@ -311,10 +321,22 @@ class ChatGPTNode(Node):
         self.add_message_to_history("user", user_prompt)
         # Generate chat completion
         chatgpt_response = self.generate_chatgpt_response(config.chat_history)
-        # Get response information
+        if not is_usable_chat_completion(chatgpt_response):
+            self.get_logger().error(
+                "OpenAI returned unusable completion; skipping assistant update"
+            )
+            self.publish_string("listening", self.llm_state_publisher)
+            return
+        # empty content and no function_call => API failure placeholder
         message, text, function_call, function_flag = self.get_response_information(
             chatgpt_response
         )
+        if text is None and function_call is None:
+            self.get_logger().error(
+                "OpenAI completion empty (no text/function_call); re-arm listening"
+            )
+            self.publish_string("listening", self.llm_state_publisher)
+            return
         # Append response to chat history
         self.add_message_to_history(
             role="assistant", content=text, function_call=function_call
