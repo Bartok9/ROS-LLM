@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.transcribe_poll import clamp_transcribe_wait_sec, should_stop_poll  # noqa: E402
 
 config = UserConfig()
 
@@ -135,7 +136,12 @@ class AudioInput(Node):
             Media={"MediaFileUri": transcribe_job_uri},
         )
 
-        # Step 6: Wait until the conversion is complete
+        # Step 6: Wait until the conversion is complete (bounded)
+        max_wait = clamp_transcribe_wait_sec(
+            getattr(config, "aws_transcribe_max_wait_sec", 60)
+        )
+        poll_started = time.time()
+        status = None
         while True:
             status = transcribe.get_transcription_job(
                 TranscriptionJobName=transcribe_job_name
@@ -145,6 +151,13 @@ class AudioInput(Node):
                 "FAILED",
             ]:
                 break
+            elapsed = time.time() - poll_started
+            if should_stop_poll(elapsed, max_wait):
+                self.get_logger().error(
+                    f"Transcribe job timed out after {max_wait}s; re-arming listening"
+                )
+                self.publish_string("listening", self.llm_state_publisher)
+                return
 
             self.get_logger().info("Converting...")
             time.sleep(0.5)

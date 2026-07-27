@@ -110,6 +110,8 @@ class UserConfig:
         self.bucket_name = 'auromixbucket'
         # [optional]: AWS transcription language, change this to 'zh-CN' for Chinese
         self.aws_transcription_language = "en-US"
+        # [optional]: Max seconds to wait for AWS Transcribe job completion
+        self.aws_transcribe_max_wait_sec = 60
         # [optional]: AWS polly voice id, change this to 'Zhiyu' for Chinese
         self.aws_voice_id = "Ivy"
 
