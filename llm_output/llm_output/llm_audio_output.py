@@ -29,10 +29,13 @@ import datetime
 import json
 import requests
 import time
+import subprocess
 
 # AWS ASR related
 import boto3
 import os
+
+from llm_output.polly_call_guard import safe_read_audio_stream
 
 # Audio recording related
 import sounddevice as sd
@@ -81,19 +84,53 @@ class AudioOutput(Node):
     def feedback_for_user_callback(self, msg):
         self.get_logger().info("Received text: '%s'" % msg.data)
 
-        # Call AWS Polly service to synthesize speech
-        polly_client = self.aws_session.client("polly")
-        self.get_logger().info("Polly client successfully initialized.")
-        response = polly_client.synthesize_speech(
-            Text=msg.data, OutputFormat="mp3", VoiceId=config.aws_voice_id
-        )
+        if msg.data is None or not str(msg.data).strip():
+            self.get_logger().warn("Skipping Polly synthesize: empty feedback text")
+            self.publish_string("listening", self.llm_state_publisher)
+            return
+
+        # Call AWS Polly service to synthesize speech (fail-closed)
+        try:
+            polly_client = self.aws_session.client("polly")
+            self.get_logger().info("Polly client successfully initialized.")
+            response = polly_client.synthesize_speech(
+                Text=str(msg.data),
+                OutputFormat="mp3",
+                VoiceId=config.aws_voice_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error("Polly synthesize_speech failed: %s" % exc)
+            self.publish_string("listening", self.llm_state_publisher)
+            return
+
+        stream = None
+        if isinstance(response, dict):
+            stream = response.get("AudioStream")
+        ok_audio, audio_or_err = safe_read_audio_stream(stream)
+        if not ok_audio:
+            self.get_logger().error("Polly audio read failed: %s" % audio_or_err)
+            self.publish_string("listening", self.llm_state_publisher)
+            return
 
         # Save the audio output to a file
         output_file_path = "/tmp/speech_output.mp3"
-        with open(output_file_path, "wb") as file:
-            file.write(response["AudioStream"].read())
-        # Play the audio output
-        os.system("mpv" + " " + output_file_path)
+        try:
+            with open(output_file_path, "wb") as file:
+                file.write(audio_or_err)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error("Failed to write speech file: %s" % exc)
+            self.publish_string("listening", self.llm_state_publisher)
+            return
+
+        # Play without shell concat (avoid injection on path changes)
+        try:
+            subprocess.run(
+                ["mpv", "--", output_file_path],
+                check=False,
+                timeout=120,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error("mpv playback failed: %s" % exc)
         self.get_logger().info("Finished Polly playing.")
         self.publish_string("feedback finished", self.llm_state_publisher)
         self.publish_string("listening", self.llm_state_publisher)
