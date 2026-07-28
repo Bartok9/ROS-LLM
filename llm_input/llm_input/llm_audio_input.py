@@ -45,6 +45,11 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.transcript_http import (
+    clamp_transcript_http_max_bytes,
+    clamp_transcript_http_timeout,
+    parse_transcript_http_body,
+)
 
 config = UserConfig()
 
@@ -149,14 +154,39 @@ class AudioInput(Node):
             self.get_logger().info("Converting...")
             time.sleep(0.5)
 
-        # Step 7: Get the transcribed text
+        # Step 7: Get the transcribed text (bounded HTTP)
         if status["TranscriptionJob"]["TranscriptionJobStatus"] == "COMPLETED":
             transcript_file_url = status["TranscriptionJob"]["Transcript"][
                 "TranscriptFileUri"
             ]
-            response = requests.get(transcript_file_url)
-            transcript_data = json.loads(response.text)
-            transcript_text = transcript_data["results"]["transcripts"][0]["transcript"]
+            http_timeout = clamp_transcript_http_timeout(
+                getattr(config, "aws_transcript_http_timeout_sec", 15)
+            )
+            max_bytes = clamp_transcript_http_max_bytes(
+                getattr(config, "aws_transcript_http_max_bytes", 1_000_000)
+            )
+            try:
+                response = requests.get(transcript_file_url, timeout=http_timeout)
+                response.raise_for_status()
+                content = response.content
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().error(
+                    "Failed to fetch transcript JSON: %s" % exc
+                )
+                self.publish_string("listening", self.llm_state_publisher)
+                return
+
+            ok_body, transcript_or_err = parse_transcript_http_body(
+                content, max_bytes=max_bytes
+            )
+            if not ok_body:
+                self.get_logger().error(
+                    "Invalid transcript payload: %s" % transcript_or_err
+                )
+                self.publish_string("listening", self.llm_state_publisher)
+                return
+
+            transcript_text = transcript_or_err
             self.get_logger().info("Audio to text conversion complete!")
             # Step 8: Publish the transcribed text to ROS2
             if transcript_text == "":  # Empty input
@@ -165,12 +195,16 @@ class AudioInput(Node):
             else:
                 self.publish_string(transcript_text, self.audio_to_text_publisher)
             # Step 9: Delete the temporary audio file from AWS S3
-            s3.delete_object(Bucket=bucket_name, Key=audio_file_key)
+            try:
+                s3.delete_object(Bucket=bucket_name, Key=audio_file_key)
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn("S3 cleanup failed: %s" % exc)
 
         else:
             self.get_logger().error(
                 f"Failed to transcribe audio: {status['TranscriptionJob']['FailureReason']}"
             )
+            self.publish_string("listening", self.llm_state_publisher)
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()
