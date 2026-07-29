@@ -40,6 +40,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.tmp_audio_path import resolve_tmp_audio_path, safe_unlink
 
 config = UserConfig()
 
@@ -48,7 +49,7 @@ class AudioInput(Node):
     def __init__(self):
         super().__init__("llm_audio_input")
         # tmp audio file
-        self.tmp_audio_file = "/tmp/user_audio_input.flac"
+        self.tmp_audio_file = resolve_tmp_audio_path("/tmp/user_audio_input.flac")
 
         # Initialization publisher
         self.initialization_publisher = self.create_publisher(
@@ -113,8 +114,10 @@ class AudioInput(Node):
         if transcript_text == "":  # Empty input
             self.get_logger().info("Empty input!")
             self.publish_string("listening", self.llm_state_publisher)
+            safe_unlink(self.tmp_audio_file)
         else:
             self.publish_string(transcript_text, self.audio_to_text_publisher)
+            safe_unlink(self.tmp_audio_file)
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()

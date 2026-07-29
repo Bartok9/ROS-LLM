@@ -45,6 +45,7 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.tmp_audio_path import resolve_tmp_audio_path, safe_unlink
 
 config = UserConfig()
 
@@ -54,7 +55,7 @@ class AudioInput(Node):
         super().__init__("llm_audio_input")
 
         # AWS service initialization
-        self.aws_audio_file = "/tmp/user_audio_input.flac"
+        self.aws_audio_file = resolve_tmp_audio_path("/tmp/user_audio_input.flac")
         self.aws_access_key_id = config.aws_access_key_id
         self.aws_secret_access_key = config.aws_secret_access_key
         self.aws_region_name = config.aws_region_name
@@ -164,7 +165,8 @@ class AudioInput(Node):
                 self.publish_string("listening", self.llm_state_publisher)
             else:
                 self.publish_string(transcript_text, self.audio_to_text_publisher)
-            # Step 9: Delete the temporary audio file from AWS S3
+            safe_unlink(self.aws_audio_file)
+            # Step 9 Delete the temporary audio file from AWS S3
             s3.delete_object(Bucket=bucket_name, Key=audio_file_key)
 
         else:
