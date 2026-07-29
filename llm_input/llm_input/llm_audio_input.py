@@ -45,6 +45,10 @@ from std_msgs.msg import String
 
 # Global Initialization
 from llm_config.user_config import UserConfig
+from llm_input.transcribe_job_cleanup import (
+    sanitize_transcribe_job_name,
+    should_attempt_job_delete,
+)
 
 config = UserConfig()
 
@@ -171,6 +175,19 @@ class AudioInput(Node):
             self.get_logger().error(
                 f"Failed to transcribe audio: {status['TranscriptionJob']['FailureReason']}"
             )
+
+        # Best-effort Transcribe job cleanup (avoid account job buildup)
+        job_status = status["TranscriptionJob"]["TranscriptionJobStatus"]
+        safe_name = sanitize_transcribe_job_name(transcribe_job_name)
+        if safe_name and should_attempt_job_delete(job_status):
+            try:
+                transcribe.delete_transcription_job(
+                    TranscriptionJobName=safe_name
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().warn(
+                    "Transcribe job cleanup failed: %s" % exc
+                )
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()
