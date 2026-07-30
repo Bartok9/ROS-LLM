@@ -169,8 +169,10 @@ class AudioInput(Node):
 
         else:
             self.get_logger().error(
-                f"Failed to transcribe audio: {status['TranscriptionJob']['FailureReason']}"
+                f"Failed to transcribe audio: {status['TranscriptionJob'].get('FailureReason', 'unknown')}"
             )
+            # Return to listening so one failed job does not stall the pipeline
+            self.publish_string("listening", self.llm_state_publisher)
 
     def publish_string(self, string_to_send, publisher_to_use):
         msg = String()
