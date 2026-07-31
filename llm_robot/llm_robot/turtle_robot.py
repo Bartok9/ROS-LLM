@@ -104,8 +104,18 @@ class TurtleRobot(Node):
         Resets the turtlesim to its initial state and clears the screen
         """
         empty_req = Empty.Request()
+        timeout_sec = 5.0
         try:
             future = self.reset_client.call_async(empty_req)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_sec)
+            if not future.done():
+                msg = f"Timed out waiting for /reset after {timeout_sec}s"
+                self.get_logger().error(msg)
+                return msg
+            exc = future.exception()
+            if exc is not None:
+                self.get_logger().error(f"Failed to reset turtlesim: {exc}")
+                return str(exc)
             response_text = "Reset turtlesim successfully"
         except Exception as error:
             self.get_logger().info(f"Failed to reset turtlesim: {error}")
