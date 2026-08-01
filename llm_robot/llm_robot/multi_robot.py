@@ -111,8 +111,8 @@ class MultiRobot(Node):
         """
         Publishes cmd_vel message to control the movement of all types of robots
         """
-        # Get parameters
-        robot_name = kwargs.get("robot_name", "")
+        # Get parameters — keep empty robot_name as "" (publisher map key from __init__)
+        robot_name = kwargs.get("robot_name", "") or ""
         duration = kwargs.get("duration", 0)
         linear_x = kwargs.get("linear_x", 0.0)
         linear_y = kwargs.get("linear_y", 0.0)
@@ -131,32 +131,34 @@ class MultiRobot(Node):
         twist_msg.angular.z = float(angular_z)
         self.get_logger().debug(f"Created cmd_vel message: {twist_msg}")
 
-        # Create publisher for new robot if not exist
-        if robot_name not in config.multi_robots_name:
-            self.cmd_vel_publishers[robot_name] = self.create_publisher(
-                Twist, f"/{robot_name}/cmd_vel", 10
-            )
-            self.get_logger().debug(f"Created new publisher for {robot_name}")
-        # Set default robot name
+        # Topic + publisher key must stay aligned. Empty name uses /cmd_vel and
+        # the "" key created in __init__ — never rename to "default" for lookup.
         if robot_name == "":
-            robot_name = "default"
             topic = "/cmd_vel"
-            self.get_logger().debug(f"default robot:{robot_name}")
+            self.get_logger().debug("default robot: empty name -> /cmd_vel")
         else:
             topic = f"/{robot_name}/cmd_vel"
+            # Create publisher for new robot if not already known
+            if robot_name not in self.cmd_vel_publishers:
+                self.cmd_vel_publishers[robot_name] = self.create_publisher(
+                    Twist, topic, 10
+                )
+                self.get_logger().debug(f"Created new publisher for {robot_name}")
+
+        publisher = self.cmd_vel_publishers[robot_name]
 
         if duration == 0:
-            self.cmd_vel_publishers[robot_name].publish(twist_msg)
+            publisher.publish(twist_msg)
         else:
             # Publish message for duration
             start_time = time.time()
             while time.time() - start_time < duration:
-                self.cmd_vel_publishers[robot_name].publish(twist_msg)
+                publisher.publish(twist_msg)
                 time.sleep(0.1)
 
         # Log
         self.get_logger().info(f"Published {topic} message successfully: {twist_msg}")
-        
+
         # Stop robot
         stop_msg = Twist()
         stop_msg.linear.x = 0.0
@@ -165,7 +167,7 @@ class MultiRobot(Node):
         stop_msg.angular.x = 0.0
         stop_msg.angular.y = 0.0
         stop_msg.angular.z = 0.0
-        self.cmd_vel_publishers[robot_name].publish(stop_msg)
+        publisher.publish(stop_msg)
         return twist_msg
 
     def publish_string(self, string_to_send, publisher_to_use):
